@@ -16,7 +16,6 @@ int main(void) {
     
     printf("input file name: ");
     scanf("%s", filename);
-    printf("%s\n", filename);
     
     if((fp = fopen(filename, "r")) == NULL){
         exit(1);
@@ -34,7 +33,6 @@ int main(void) {
             field[i][j] = value;
         }
     }
-    printf("end\n");
     
     fclose(fp);
     
