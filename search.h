@@ -3,12 +3,19 @@
 #include "list.h"
 
 //#define DEBUG
-
+void initAll();
+void initAstarSearch();
+NODE *AstarSearch(FIELD initialField);
 int calcManhattanDistance(int value, int row, int column);
 int calcH(FIELD field);
 void expand(NODE *node);
 
 POSITION **move = NULL;
+
+void initAll() {
+    initList();
+    initAstarSearch();
+}
 
 void initAstarSearch() {
     int direction;
@@ -32,7 +39,7 @@ void initAstarSearch() {
 }
 
 NODE *AstarSearch(FIELD initialField) {
-    initAstarSearch();
+    initAll();
     
     NODE *initialNode = makeNewNode(initialField);
     initialNode -> g_cost = 0;

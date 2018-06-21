@@ -1,19 +1,50 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "node.h"
 
+#define CLOSED_LIST_TABLE_MAX (20 * 4)
+#define OPEN_LIST_TABLE_MAX (45 + CLOSED_LIST_TABLE_MAX)
+
+struct LIST{
+    struct LIST *prevList;
+    struct LIST *nextList;
+    NODE *node;
+};
+
+typedef struct LIST LIST;
+
+void initList();
 LIST *makeNewList(NODE *node);
-LIST *isIncludedInList(LIST *listHead, NODE *node);
 LIST *isIncludedInOpenList(NODE *node);
 LIST *isIncludedInClosedList(NODE *node);
-LIST *insertToList(LIST *listHead, NODE *node);
-void *insertToOpenList(NODE *node);
-void *insertToClosedList(NODE *node);
-NODE *popFromList(LIST **listHeadPtr);
+LIST **insertToList(LIST **listTable, NODE *node, int cost);
+void insertToOpenList(NODE *node);
+void insertToClosedList(NODE *node);
 NODE *popFromOpenList();
-NODE *popFromClosedList();
+void removeList(LIST *list);
 
-static LIST *openListHead = NULL;
-static LIST *closedListHead = NULL;
+static LIST **openListTable = NULL;
+static LIST **closedListTable = NULL;
+
+void initList() {
+    int i;
+    
+    if((openListTable = (LIST **)malloc(OPEN_LIST_TABLE_MAX * sizeof(LIST *))) == NULL) {
+        exit(1);
+    }
+    
+    for(i = 0; i < OPEN_LIST_TABLE_MAX; i++) {
+        openListTable[i] = NULL;
+    }
+    
+    if((closedListTable = (LIST **)malloc(CLOSED_LIST_TABLE_MAX * sizeof(LIST *))) == NULL) {
+        exit(1);
+    }
+    
+    for(i = 0; i < CLOSED_LIST_TABLE_MAX; i++) {
+        closedListTable[i] = NULL;
+    }
+}
 
 LIST *makeNewList(NODE *node) {
     LIST *newList = NULL;
@@ -29,109 +60,105 @@ LIST *makeNewList(NODE *node) {
     return newList;
 }
 
-LIST *isIncludedInList(LIST *listHead, NODE *node) {
-    LIST *tmpList = listHead;
+LIST *isIncludedInOpenList(NODE *node) {
+    int i;
+    LIST *tmpOpenList = NULL;
     
-    if(tmpList == NULL) return NULL;
-    
-    do {
-        if(isSameField(tmpList -> node -> field, node -> field)) {
-            return tmpList;
-        }
-        tmpList = tmpList -> nextList;
-    } while(tmpList != listHead);
+    for(i = 0; i < OPEN_LIST_TABLE_MAX; i++) {
+        tmpOpenList = openListTable[i];
+        
+        if(openListTable[i] == NULL) continue;
+        
+        do {
+            if(isSameField(tmpOpenList -> node -> field, node -> field)) {
+                return tmpOpenList;
+            }
+            tmpOpenList = tmpOpenList -> nextList;
+        } while(tmpOpenList != openListTable[i]);
+    }
     
     return NULL;
 }
 
-LIST *isIncludedInOpenList(NODE *node) {
-    return isIncludedInList(openListHead, node);
-}
-
 LIST *isIncludedInClosedList(NODE *node) {
-    return isIncludedInList(closedListHead, node);
-}
-
-LIST *insertToList(LIST *listHead, NODE *node) {
-    LIST *newList = makeNewList(node);
-    LIST *tmpList = listHead;
-    LIST *tmpPrevList = NULL;
-
-    if(listHead == NULL) {
-        listHead = newList;
-        newList -> nextList = listHead;
-        newList -> prevList = listHead;
-        
-        return listHead;
-    }
+    int i;
+    LIST *tmpClosedList = NULL;
     
-    if(node -> f_cost < listHead -> node -> f_cost) { //listの先頭に挿入
-        tmpPrevList = listHead -> prevList;
-        tmpPrevList -> nextList = newList;
-        newList -> prevList = tmpPrevList;
-        newList -> nextList = listHead;
-        listHead -> prevList = newList;
-        listHead = newList;
-        
-        return listHead;
-    }
-    
-    tmpList = tmpList -> nextList;
-    
-    while((tmpList != listHead) && (tmpList -> node -> f_cost < node -> f_cost)) {
-        tmpList = tmpList -> nextList;
-    }
-    
-    tmpPrevList = tmpList -> prevList;
-    tmpPrevList -> nextList = newList;
-    newList -> prevList = tmpPrevList;
-    newList -> nextList = tmpList;
-    tmpList -> prevList = newList;
-    
-    return listHead;
-}
-
-void *insertToOpenList(NODE *node) {
-    openListHead = insertToList(openListHead, node);
-}
-
-void *insertToClosedList(NODE *node) {
-    closedListHead = insertToList(closedListHead, node);
-}
-
-NODE *popFromList(LIST **listHeadPtr) {
-    LIST *listHead = *listHeadPtr;
-    NODE *node = NULL;
-    
-    if(listHead == NULL) {
+    if(closedListTable[node -> h_cost] == NULL) {
         return NULL;
     }
     
-    node = listHead -> node;
+    tmpClosedList = closedListTable[node -> h_cost];
     
-    if(listHead -> nextList == listHead) {
-        listHead = NULL;
+    do {
+        if(isSameField(tmpClosedList -> node -> field, node -> field)) {
+            return tmpClosedList;
+        }
+        tmpClosedList = tmpClosedList -> nextList;
+    } while(tmpClosedList != closedListTable[node -> h_cost]);
+    
+    return NULL;
+}
+
+LIST **insertToList(LIST **listTable, NODE *node, int cost) {
+    LIST *newList = makeNewList(node);
+    LIST *tmpTailList = NULL;
+    
+    if(listTable[cost] == NULL) {
+        listTable[cost] = newList;
+        newList -> nextList = listTable[cost];
+        newList -> prevList = listTable[cost];
+        
+        return listTable;
+    }
+    
+    tmpTailList = listTable[cost] -> prevList;
+    tmpTailList -> nextList = newList;
+    newList -> prevList = tmpTailList;
+    newList -> nextList = listTable[cost];
+    listTable[cost] -> prevList = newList;
+    
+    return listTable;
+}
+
+
+void insertToOpenList(NODE *node) {
+    openListTable = insertToList(openListTable, node, node -> f_cost);
+}
+
+void insertToClosedList(NODE *node) {
+    closedListTable = insertToList(closedListTable, node, node -> h_cost);
+}
+
+NODE *popFromOpenList() {
+    int i;
+    LIST *tmpOpenList = NULL;
+    NODE *node = NULL;
+    
+    for(i = 0; i < OPEN_LIST_TABLE_MAX; i++) {
+        tmpOpenList = openListTable[i];
+        
+        if(openListTable[i] == NULL) continue;
+        
+        node = openListTable[i] -> node;
+        
+        if(openListTable[i] -> nextList == openListTable[i]) {
+            openListTable[i] = NULL;
+            
+            return node;
+        }
+        
+        LIST *tmpHeadList = openListTable[i] -> nextList;
+        LIST *tmpTailList = openListTable[i] -> prevList;
+        
+        tmpHeadList -> prevList = tmpTailList;
+        tmpTailList -> nextList = tmpHeadList;
+        openListTable[i] = tmpHeadList;
         
         return node;
     }
     
-    LIST *tmpNextList = listHead -> nextList;
-    LIST *tmpTailList = listHead -> prevList;
-    
-    tmpNextList -> prevList = tmpTailList;
-    tmpTailList -> nextList = tmpNextList;
-    
-    *listHeadPtr = tmpNextList;
-
-    return node;
-}
-
-NODE *popFromOpenList() {
-    return popFromList(&openListHead);
-}
-
-NODE *popFromClosedList() {
-    return popFromList(&closedListHead);
+    return NULL;
 }
 
 void removeList(LIST *list) {
@@ -147,29 +174,4 @@ void removeList(LIST *list) {
     
     tmpPrevList -> nextList = tmpNextList;
     tmpNextList -> prevList = tmpPrevList;
-}
-
-void showList(LIST *listHead) {
-    LIST *tmpList = listHead;
-    
-    if(tmpList == NULL) return;
-    
-    do {
-        showField(tmpList -> node -> field);
-        printf("fcost: %d\n", tmpList -> node -> f_cost);
-        printf("---------------\n");
-        tmpList = tmpList -> nextList;
-    } while(tmpList != listHead);
-}
-
-void showOpenList() {
-    printf("/*==in openList==\n");
-    showList(openListHead);
-    printf("==in openList==*/\n");
-}
-
-void showClosedList() {
-    printf("/*==in closedList==\n");
-    showList(closedListHead);
-    printf("==in closedList==*/\n");
 }

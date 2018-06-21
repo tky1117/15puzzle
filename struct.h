@@ -19,14 +19,6 @@ struct NODE {
 
 typedef struct NODE NODE;
 
-struct LIST {
-    struct LIST *prevList;
-    struct LIST *nextList;
-    NODE *node;
-};
-
-typedef struct LIST LIST;
-
 typedef enum{
     North, West, South, East
 } DIRECTION;
