@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include "list.h"
 
 //#define DEBUG
@@ -10,6 +11,8 @@ int calcManhattanDistance(int value, int row, int column);
 int calcH(FIELD field);
 void expand(NODE *node);
 
+clock_t start, end;
+clock_t totalTime = 0;
 POSITION **move = NULL;
 
 void initAll() {
@@ -47,6 +50,7 @@ NODE *AstarSearch(FIELD initialField) {
     initialNode -> f_cost = initialNode -> g_cost + initialNode -> h_cost;
     initialNode -> positionOfSpace = getPositionOfSpace(initialField);
     
+    
     insertToOpenList(initialNode);
     
     while(1) {
@@ -60,6 +64,7 @@ NODE *AstarSearch(FIELD initialField) {
             return node;
         }
         expand(node);//問題
+        
         insertToClosedList(node);
         
 #ifdef DEBUG
@@ -70,26 +75,32 @@ NODE *AstarSearch(FIELD initialField) {
     return NULL;
 }
 
+//0.6秒
 int calcManhattanDistance(int value, int row, int column) {
     int correctRow = value / HEIGHT;
     int correctColumn = value % WIDTH;
     int distanceOfRow = row - correctRow;
     int distanceOfColumn = column - correctColumn;
     
-    if(distanceOfRow < 0) distanceOfRow *= -1;
-    if(distanceOfColumn < 0) distanceOfColumn *= -1;
+    if(distanceOfRow < 0) distanceOfRow = -distanceOfRow;
+    if(distanceOfColumn < 0) distanceOfColumn = -distanceOfColumn;
     
     return distanceOfRow + distanceOfColumn;
 }
-
+//->0.14
 int calcH(FIELD field) {
     int i, j;
     int totalDistance = 0;
     FIELD mask = 0xf;
+    FIELD value = 0;
 
     for(i = HEIGHT - 1; i >= 0; i--) {
         for(j = WIDTH - 1 ; j >= 0; j--) {
-            totalDistance += calcManhattanDistance(field & mask, i, j);
+            value = field & mask;
+            if(value) {
+                //valueが0でない場合
+                totalDistance += calcManhattanDistance(value, i, j);
+            }
             field = field >> 4;
         }
     }
@@ -97,8 +108,24 @@ int calcH(FIELD field) {
     return totalDistance;
 }
 
+//->0.12
+int calcHDelta(NODE *node) {
+    POSITION *positionOfSpace = node -> positionOfSpace;
+    POSITION *parentPositionOfSpace = node -> parentNode -> positionOfSpace;
+    FIELD field = node -> field;
+    int row = positionOfSpace -> row;
+    int column = positionOfSpace -> column;
+    int parentRow = parentPositionOfSpace -> row;
+    int parentColumn = parentPositionOfSpace -> column;
+    //
+    FIELD value = getValue(field, parentRow, parentColumn);
+    
+    int delta = calcManhattanDistance(value, parentRow, parentColumn) - calcManhattanDistance(value, row, column);
+    
+    return delta;
+}
+
 void expand(NODE *node) {
-    int i, j;
     DIRECTION direction;
     int row = node -> positionOfSpace -> row;
     int column = node -> positionOfSpace -> column;
@@ -113,9 +140,8 @@ void expand(NODE *node) {
             continue;
         }
         
-        FIELD bitMask = 0xf;
         FIELD zeroMask = 0xf;
-        FIELD value = (field >> shiftTo(newRow, newColumn)) & bitMask;
+        FIELD value = getValue(field, newRow, newColumn);
 
         zeroMask = zeroMask << shiftTo(newRow, newColumn);
         zeroMask = ~zeroMask;
@@ -124,13 +150,19 @@ void expand(NODE *node) {
         
         FIELD newField = (node -> field | value) & zeroMask;
         NODE *newNode = makeNewNode(newField);
-        newNode -> g_cost = node -> g_cost + 1;
-        newNode -> h_cost = calcH(newNode -> field);
-        newNode -> f_cost = newNode -> g_cost + newNode -> h_cost;
         newNode -> parentNode = node;
         newNode -> positionOfSpace = makeNewPosition(newRow, newColumn);
+        newNode -> g_cost = node -> g_cost + 1;
+        //here
+        start = clock();
+        newNode -> h_cost = node -> h_cost + calcHDelta(newNode);
+        end = clock();
+        totalTime += end - start;
+        newNode -> f_cost = newNode -> g_cost + newNode -> h_cost;
+        
         
         LIST *removableOpenList = isIncludedInOpenList(newNode);
+        
         
         if(removableOpenList != NULL) {
             if(newNode -> f_cost < removableOpenList -> node -> f_cost) {
@@ -153,5 +185,9 @@ void expand(NODE *node) {
         }
         insertToOpenList(newNode);
     }
+}
+
+double getTotalTime() {
+    return (double)totalTime / CLOCKS_PER_SEC;
 }
 

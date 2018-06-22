@@ -26,7 +26,7 @@ int main(void) {
     for(i = 0; i < HEIGHT; i++) {
         for(j = 0; j < WIDTH; j++) {
             initialField = initialField << 4;
-            fscanf(fp, "%x", &value);
+            fscanf(fp, "%llx", &value);
             initialField += value;
         }
     }
@@ -36,6 +36,8 @@ int main(void) {
     NODE *node = AstarSearch(initialField);
     printf("g_cost: %d\n", node -> g_cost);
     showPath(node);
+    
+    printf("total %lf\n", getTotalTime());
     
     return 0;
 }

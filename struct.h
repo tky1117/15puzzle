@@ -65,7 +65,7 @@ void showField(FIELD field) {
         for(j = WIDTH - 1; j >= 0; j--) {
             FIELD value = field >> 4 * (i * HEIGHT + j);
             value = value & mask;
-            printf("%x ", value);
+            printf("%llx ", value);
         }
         printf("\n");
     }
@@ -97,5 +97,14 @@ POSITION *getPositionOfSpace(FIELD field) {
     }
     
     return NULL;
+}
+
+FIELD getValue(FIELD field, int row, int column) {
+    FIELD bitMask = 0xf;
+    
+    field = field >> 4 * (HEIGHT * WIDTH - (row * HEIGHT + column) - 1);
+    
+    return field & bitMask;
+    
 }
 

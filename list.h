@@ -60,6 +60,8 @@ LIST *makeNewList(NODE *node) {
     return newList;
 }
 
+//遅い
+//6.2秒 -> 2.8秒/24.8秒
 LIST *isIncludedInOpenList(NODE *node) {
     int i;
     LIST *tmpOpenList = NULL;
@@ -80,8 +82,9 @@ LIST *isIncludedInOpenList(NODE *node) {
     return NULL;
 }
 
+//遅い
+//1.6秒 -> 0.4秒/4.2秒
 LIST *isIncludedInClosedList(NODE *node) {
-    int i;
     LIST *tmpClosedList = NULL;
     
     if(closedListTable[node -> h_cost] == NULL) {
@@ -121,23 +124,21 @@ LIST **insertToList(LIST **listTable, NODE *node, int cost) {
     return listTable;
 }
 
-
+//0.05秒
 void insertToOpenList(NODE *node) {
     openListTable = insertToList(openListTable, node, node -> f_cost);
 }
 
+//0.03秒
 void insertToClosedList(NODE *node) {
     closedListTable = insertToList(closedListTable, node, node -> h_cost);
 }
 
 NODE *popFromOpenList() {
     int i;
-    LIST *tmpOpenList = NULL;
     NODE *node = NULL;
     
     for(i = 0; i < OPEN_LIST_TABLE_MAX; i++) {
-        tmpOpenList = openListTable[i];
-        
         if(openListTable[i] == NULL) continue;
         
         node = openListTable[i] -> node;

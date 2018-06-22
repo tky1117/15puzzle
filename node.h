@@ -3,7 +3,6 @@
 NODE *makeNewNode(FIELD field);
 
 NODE *makeNewNode(FIELD field) {
-    int i, j;
     NODE *newNode = NULL;
     
     if((newNode = (NODE *)malloc(sizeof(NODE))) == NULL) {
