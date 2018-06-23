@@ -38,6 +38,7 @@ int main(void) {
     showPath(node);
     
     printf("total %lf\n", getTotalTime());
+    printf("length of openListTable = %d\n", getLenthOfOpenListTable());
     
     return 0;
 }

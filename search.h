@@ -55,6 +55,7 @@ NODE *AstarSearch(FIELD initialField) {
     
     while(1) {
         NODE *node = popFromOpenList();
+        totalTime += end - start;
         
         if(node == NULL) {
             break;
@@ -63,8 +64,9 @@ NODE *AstarSearch(FIELD initialField) {
         if(isGoal(node)) {
             return node;
         }
-        expand(node);//問題
         
+        expand(node);//問題
+
         insertToClosedList(node);
         
 #ifdef DEBUG
@@ -91,12 +93,12 @@ int calcManhattanDistance(int value, int row, int column) {
 int calcH(FIELD field) {
     int i, j;
     int totalDistance = 0;
-    FIELD mask = 0xf;
+    FIELD bitMask = 0xf;
     FIELD value = 0;
 
     for(i = HEIGHT - 1; i >= 0; i--) {
         for(j = WIDTH - 1 ; j >= 0; j--) {
-            value = field & mask;
+            value = field & bitMask;
             if(value) {
                 //valueが0でない場合
                 totalDistance += calcManhattanDistance(value, i, j);
@@ -117,7 +119,6 @@ int calcHDelta(NODE *node) {
     int column = positionOfSpace -> column;
     int parentRow = parentPositionOfSpace -> row;
     int parentColumn = parentPositionOfSpace -> column;
-    //
     FIELD value = getValue(field, parentRow, parentColumn);
     
     int delta = calcManhattanDistance(value, parentRow, parentColumn) - calcManhattanDistance(value, row, column);
@@ -153,16 +154,10 @@ void expand(NODE *node) {
         newNode -> parentNode = node;
         newNode -> positionOfSpace = makeNewPosition(newRow, newColumn);
         newNode -> g_cost = node -> g_cost + 1;
-        //here
-        start = clock();
         newNode -> h_cost = node -> h_cost + calcHDelta(newNode);
-        end = clock();
-        totalTime += end - start;
         newNode -> f_cost = newNode -> g_cost + newNode -> h_cost;
-        
-        
+
         LIST *removableOpenList = isIncludedInOpenList(newNode);
-        
         
         if(removableOpenList != NULL) {
             if(newNode -> f_cost < removableOpenList -> node -> f_cost) {
@@ -183,7 +178,9 @@ void expand(NODE *node) {
                 continue;
             }
         }
+        
         insertToOpenList(newNode);
+        
     }
 }
 
