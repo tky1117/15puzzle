@@ -44,7 +44,6 @@ int isSameField(FIELD field1, FIELD field2) {
     return field1 == field2;
 }
 
-
 int isInRange(POSITION *position) {
     if(position -> row < 0 || HEIGHT <= position -> row || position -> column < 0 || WIDTH <= position -> column ) {
         return 0;

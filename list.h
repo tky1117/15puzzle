@@ -2,13 +2,14 @@
 #include <stdlib.h>
 #include "node.h"
 
-#define H_COST_MAX (20 * 4)
+#define H_COST_MAX 40
 
 #define CLOSED_LIST_TABLE_MAX H_COST_MAX
-#define OPEN_LIST_TABLE_MAX (45 + H_COST_MAX)
+#define OPEN_LIST_TABLE_MAX (20 + H_COST_MAX)
 
 #define OPEN_LIST_TABLE_INDEX_MAX H_COST_MAX
 #define CLOSED_LIST_TABLE_INDEX_MAX 0xfedc
+#define CLOSED_LIST_BYTE_MASK 0xffff
 
 struct LIST {
     struct LIST *prevList;
@@ -34,14 +35,14 @@ int getLengthOfOpenListTable();
 
 static LIST ***openListTable = NULL;
 static LIST ***closedListTable = NULL;
-static FIELD bitMask = 0xffff;
+static int openListTableHeadIndex = 0;
 
 void initList() {
     initListTable();
 }
 
 void initListTable() {
-    int i, j;
+    unsigned long long i, j;
     
     if((openListTable = (LIST ***)malloc(OPEN_LIST_TABLE_MAX * sizeof(LIST **))) == NULL) {
         exit(1);
@@ -71,6 +72,20 @@ void initListTable() {
     }
 }
 
+int getIndex(FIELD field) {
+    int index = 0;
+    FIELD getIndexByteMask1 = 0xff;
+    FIELD getIndexByteMask2 = 0xff00;
+    
+    field = field >> 4 * (HEIGHT * WIDTH - 6);
+    index = field & getIndexByteMask1;
+    field = field >> 2;
+    field = field & getIndexByteMask2;
+    index = index | field;
+    
+    return index;
+}
+
 LIST *makeNewList(NODE *node) {
     LIST *newList = NULL;
     
@@ -85,14 +100,12 @@ LIST *makeNewList(NODE *node) {
     return newList;
 }
 
-//遅い
-//6.2秒 -> 2.8秒/24.8秒
 LIST *isIncludedInOpenList(NODE *node) {
     int i;
     LIST *tmpOpenList = NULL;
     int h_cost = node -> h_cost;
     
-    for(i = 0; i < OPEN_LIST_TABLE_MAX; i++) {
+    for(i = openListTableHeadIndex; i < OPEN_LIST_TABLE_MAX; i++) {
         tmpOpenList = openListTable[i][h_cost];
         
         if(openListTable[i][h_cost] == NULL) continue;
@@ -108,12 +121,10 @@ LIST *isIncludedInOpenList(NODE *node) {
     return NULL;
 }
 
-//遅い
-//1.6秒 -> 0.4秒/4.2秒
 LIST *isIncludedInClosedList(NODE *node) {
     LIST *tmpClosedList = NULL;
     int h_cost = node -> h_cost;
-    int index = node -> field & bitMask;
+    int index = getIndex(node -> field);
     
     if(closedListTable[h_cost][index] == NULL) {
         return NULL;
@@ -152,24 +163,28 @@ LIST ***insertToList(LIST ***listTable, NODE *node, int cost, int index) {
     return listTable;
 }
 
-//0.05秒
 void insertToOpenList(NODE *node) {
+    if(node -> f_cost < openListTableHeadIndex) {
+        openListTableHeadIndex = node -> f_cost;
+    }
+    
     openListTable = insertToList(openListTable, node, node -> f_cost, node -> h_cost);
 }
 
-//0.03秒
 void insertToClosedList(NODE *node) {
-    closedListTable = insertToList(closedListTable, node, node -> h_cost, node -> field & bitMask);
+    int index = getIndex(node -> field);
+    closedListTable = insertToList(closedListTable, node, node -> h_cost, index);
 }
 
 NODE *popFromOpenList() {
     int i, j;
     NODE *node = NULL;
     
-    for(i = 0; i < OPEN_LIST_TABLE_MAX; i++) {
+    for(i = openListTableHeadIndex; i < OPEN_LIST_TABLE_MAX; i++) {
         for(j = 0; j < OPEN_LIST_TABLE_INDEX_MAX; j++) {
             if(openListTable[i][j] == NULL) continue;
             
+            openListTableHeadIndex = i;
             node = openListTable[i][j] -> node;
             
             if(openListTable[i][j] -> nextList == openListTable[i][j]) {
@@ -224,13 +239,68 @@ int getLengthOfList(LIST *listHead) {
 
 int getLenthOfOpenListTable() {
     int i, j;
-    int length = 0;
+    int *length_i = NULL;
+    int **length = NULL;
+    FILE *fp = fopen("openListTable.csv", "w");
+    int lengthOfTable = 0;
+    int SPECIAL = 43;
     
-    for(i = 0; i < OPEN_LIST_TABLE_MAX; i++) {
-        for(j = 0; j < OPEN_LIST_TABLE_INDEX_MAX; j++) {
-            length += getLengthOfList(openListTable[i][j]);
-        }
+    if((length = (int **)malloc(OPEN_LIST_TABLE_MAX * sizeof(int *))) == NULL) {
+        exit(1);
+    }
+    if((length_i = (int *)malloc(OPEN_LIST_TABLE_INDEX_MAX * sizeof(int *))) == NULL) {
+        exit(1);
     }
     
-    return length;
+    for(i = 0;i < OPEN_LIST_TABLE_MAX; i++) {
+        if((length[i] = (int *)malloc(OPEN_LIST_TABLE_INDEX_MAX * sizeof(int))) == NULL) {
+            exit(1);
+        }
+        length_i[i] = 0;
+        for(j = 0; j < OPEN_LIST_TABLE_INDEX_MAX; j++) {
+            length[i][j] = getLengthOfList(openListTable[i][j]);
+            length_i[i] += length[i][j];
+        }
+        lengthOfTable += length_i[i];
+    }
+    
+    for(j = 0; j < OPEN_LIST_TABLE_INDEX_MAX; j++) {
+        fprintf(fp, "%d, %d, %d\n", SPECIAL, j, length[SPECIAL][j]);
+    }
+    
+    fclose(fp);
+    
+    return lengthOfTable;
 }
+
+int getLenthOfClosedListTable() {
+    int i, j;
+    int *length_i = NULL;
+    int **length = NULL;
+    FILE *fp = fopen("closedListTable.csv", "w");
+    int lengthOfTable = 0;
+    
+    if((length = (int **)malloc(CLOSED_LIST_TABLE_MAX * sizeof(int *))) == NULL) {
+        exit(1);
+    }
+    if((length_i = (int *)malloc(CLOSED_LIST_TABLE_INDEX_MAX * sizeof(int *))) == NULL) {
+        exit(1);
+    }
+    for(i = 0;i < CLOSED_LIST_TABLE_MAX; i++) {
+        if((length[i] = (int *)malloc(CLOSED_LIST_TABLE_INDEX_MAX * sizeof(int))) == NULL) {
+            exit(1);
+        }
+        length_i[i] = 0;
+        for(j = 0; j < CLOSED_LIST_TABLE_INDEX_MAX; j++) {
+            length[i][j] = getLengthOfList(closedListTable[i][j]);
+            length_i[i] += length[i][j];
+        }
+        fprintf(fp, "%d, %d, %d\n", i, j, length_i[i]);
+        lengthOfTable += length_i[i];
+    }
+
+    fclose(fp);
+    
+    return lengthOfTable;
+}
+

@@ -6,18 +6,52 @@
 //#define DEBUG
 void initAll();
 void initAstarSearch();
+void initManhattanDistance();
+void initList();
 NODE *AstarSearch(FIELD initialField);
 int calcManhattanDistance(int value, int row, int column);
 int calcH(FIELD field);
 void expand(NODE *node);
 
-clock_t start, end;
-clock_t totalTime = 0;
-POSITION **move = NULL;
+static clock_t start, end;
+static clock_t totalTime = 0;
+static POSITION **move = NULL;
+static int count = 0;
+static int **manhattanDistance = NULL;
 
 void initAll() {
+    initManhattanDistance();
     initList();
     initAstarSearch();
+}
+
+void initManhattanDistance() {
+    int i, j;
+    int row0, column0, row1, column1;
+    int distanceOfRow, distanceOfColumn;
+    
+    if((manhattanDistance = (int **)malloc(HEIGHT * WIDTH * sizeof(int *))) == NULL) {
+        exit(1);
+    }
+    for(i = 0; i < HEIGHT * WIDTH; i++) {
+        if((manhattanDistance[i] = (int *)malloc(HEIGHT * WIDTH * sizeof(int))) == NULL) {
+            exit(1);
+        }
+        for(j = 0; j < HEIGHT * WIDTH; j++) {
+            row0 = i / HEIGHT;
+            column0 = i % WIDTH;
+            row1 = j / HEIGHT;
+            column1 = j % WIDTH;
+            
+            distanceOfRow = row0 - row1;
+            distanceOfColumn = column0 - column1;
+            
+            if(distanceOfRow < 0) distanceOfRow = -distanceOfRow;
+            if(distanceOfColumn < 0) distanceOfColumn = -distanceOfColumn;
+            
+            manhattanDistance[i][j] = distanceOfRow + distanceOfColumn;
+        }
+    }
 }
 
 void initAstarSearch() {
@@ -50,12 +84,10 @@ NODE *AstarSearch(FIELD initialField) {
     initialNode -> f_cost = initialNode -> g_cost + initialNode -> h_cost;
     initialNode -> positionOfSpace = getPositionOfSpace(initialField);
     
-    
     insertToOpenList(initialNode);
     
     while(1) {
         NODE *node = popFromOpenList();
-        totalTime += end - start;
         
         if(node == NULL) {
             break;
@@ -65,8 +97,8 @@ NODE *AstarSearch(FIELD initialField) {
             return node;
         }
         
-        expand(node);//問題
-
+        expand(node);
+        
         insertToClosedList(node);
         
 #ifdef DEBUG
@@ -77,7 +109,6 @@ NODE *AstarSearch(FIELD initialField) {
     return NULL;
 }
 
-//0.6秒
 int calcManhattanDistance(int value, int row, int column) {
     int correctRow = value / HEIGHT;
     int correctColumn = value % WIDTH;
@@ -89,19 +120,19 @@ int calcManhattanDistance(int value, int row, int column) {
     
     return distanceOfRow + distanceOfColumn;
 }
-//->0.14
+
 int calcH(FIELD field) {
     int i, j;
     int totalDistance = 0;
-    FIELD bitMask = 0xf;
+    FIELD byteMask = 0xf;
     FIELD value = 0;
 
     for(i = HEIGHT - 1; i >= 0; i--) {
         for(j = WIDTH - 1 ; j >= 0; j--) {
-            value = field & bitMask;
+            value = field & byteMask;
             if(value) {
                 //valueが0でない場合
-                totalDistance += calcManhattanDistance(value, i, j);
+                totalDistance += manhattanDistance[value][i * HEIGHT + j];
             }
             field = field >> 4;
         }
@@ -110,7 +141,6 @@ int calcH(FIELD field) {
     return totalDistance;
 }
 
-//->0.12
 int calcHDelta(NODE *node) {
     POSITION *positionOfSpace = node -> positionOfSpace;
     POSITION *parentPositionOfSpace = node -> parentNode -> positionOfSpace;
@@ -121,7 +151,7 @@ int calcHDelta(NODE *node) {
     int parentColumn = parentPositionOfSpace -> column;
     FIELD value = getValue(field, parentRow, parentColumn);
     
-    int delta = calcManhattanDistance(value, parentRow, parentColumn) - calcManhattanDistance(value, row, column);
+    int delta = manhattanDistance[value][parentRow * HEIGHT + parentColumn] - manhattanDistance[value][row * HEIGHT + column];
     
     return delta;
 }
@@ -131,7 +161,7 @@ void expand(NODE *node) {
     int row = node -> positionOfSpace -> row;
     int column = node -> positionOfSpace -> column;
     FIELD field = node -> field;
-    
+
     for(direction = North; direction <= East; direction++) {
         int newRow = row + move[direction] -> row;
         int newColumn = column + move[direction] -> column;
@@ -141,15 +171,13 @@ void expand(NODE *node) {
             continue;
         }
         
-        FIELD zeroMask = 0xf;
+        FIELD zeroByteMask = 0xf;
         FIELD value = getValue(field, newRow, newColumn);
 
-        zeroMask = zeroMask << shiftTo(newRow, newColumn);
-        zeroMask = ~zeroMask;
-        
+        zeroByteMask = zeroByteMask << shiftTo(newRow, newColumn);
+        zeroByteMask = ~zeroByteMask;
         value = value << shiftTo(row, column);
-        
-        FIELD newField = (node -> field | value) & zeroMask;
+        FIELD newField = (node -> field | value) & zeroByteMask;
         NODE *newNode = makeNewNode(newField);
         newNode -> parentNode = node;
         newNode -> positionOfSpace = makeNewPosition(newRow, newColumn);
@@ -157,7 +185,8 @@ void expand(NODE *node) {
         newNode -> h_cost = node -> h_cost + calcHDelta(newNode);
         newNode -> f_cost = newNode -> g_cost + newNode -> h_cost;
 
-        LIST *removableOpenList = isIncludedInOpenList(newNode);
+        LIST *removableOpenList = NULL;
+        /*isIncludedInOpenList(newNode);
         
         if(removableOpenList != NULL) {
             if(newNode -> f_cost < removableOpenList -> node -> f_cost) {
@@ -167,24 +196,32 @@ void expand(NODE *node) {
                 continue;
             }
         }
+        */
         
+        start = clock();
         LIST *removableClosedList = isIncludedInClosedList(newNode);
+        end = clock();
+        totalTime += end - start;
         
         if(removableClosedList != NULL) {
             if(newNode -> f_cost < removableClosedList -> node -> f_cost) {
                 //新しいnodeの方がコストが小さい
                 removeList(removableClosedList);
             } else {
+            
                 continue;
             }
         }
         
         insertToOpenList(newNode);
-        
     }
+    
 }
 
 double getTotalTime() {
     return (double)totalTime / CLOCKS_PER_SEC;
 }
 
+int getCount() {
+    return count;
+}

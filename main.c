@@ -39,6 +39,8 @@ int main(void) {
     
     printf("total %lf\n", getTotalTime());
     printf("length of openListTable = %d\n", getLenthOfOpenListTable());
+    printf("length of closedListTable = %d\n", getLenthOfClosedListTable());
+    printf("count: %d\n", getCount());
     
     return 0;
 }
